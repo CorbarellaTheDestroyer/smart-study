@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartStudy - Real AI Quizzer</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #f4f7f6; 
+            color: #333; 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-height: 100vh; 
+        }
+        
+        h1 { color: #2c3e50; margin-bottom: 5px; }
+        .subtitle { color: #7f8c8d; margin-top: 0; margin-bottom: 25px; }
+
+        .card-container { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1); 
+            text-align: center; 
+            width: 100%; 
+            max-width: 480px; 
+            margin-bottom: 30px; 
+            box-sizing: border-box;
+        }
+        
+        /* Auth UI */
+        .auth-toggle { display: flex; justify-content: space-around; margin-bottom: 20px; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;}
+        .auth-toggle span { cursor: pointer; font-weight: bold; color: #7f8c8d; transition: 0.3s; }
+        .auth-toggle span.active { color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 12px; margin-bottom: -12px;}
+        
+        .input-group { margin-bottom: 15px; text-align: left; }
+        .input-group label { display: block; font-weight: bold; font-size: 14px; margin-bottom: 5px; color: #34495e; }
+        .input-group input { width: 100%; padding: 12px; border: 2px solid #bdc3c7; border-radius: 6px; box-sizing: border-box; font-size: 14px; transition: 0.3s;}
+        .input-group input:focus { border-color: #3498db; outline: none; }
+        
+        .auth-error { color: #e74c3c; font-size: 14px; font-weight: bold; margin-bottom: 15px; display: none; }
+
+        /* Main App Area */
+        #appSection { display: none; }
+        .user-bar { display: flex; justify-content: space-between; align-items: center; background: #e8f4fd; padding: 10px 20px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; color: #2980b9;}
+        .logout-btn { background: #e74c3c; padding: 6px 12px; font-size: 14px; width: auto; margin: 0; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold;}
+        .logout-btn:hover { background: #c0392b; }
+
+        .drop-zone { max-width: 100%; height: 120px; padding: 20px; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 500; font-size: 16px; cursor: pointer; color: #777; border: 3px dashed #3498db; border-radius: 10px; margin-bottom: 20px; transition: 0.3s; }
+        .drop-zone--over { border-style: solid; background-color: #e8f4fd; color: #2980b9; }
+        .drop-zone__input { display: none; }
+
+        button { background-color: #3498db; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin: 5px; width: 100%; transition: 0.2s; }
+        button:hover { background-color: #2980b9; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        
+        #status-message { margin-top: 15px; font-weight: bold; line-height: 1.4; }
+
+        /* Slide Viewer UI */
+        #slideViewerArea { display: none; width: 100%; max-width: 800px; flex-direction: column; align-items: center; }
+        .slide-screen { background: white; width: 100%; min-height: 380px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); padding: 40px; box-sizing: border-box; display: flex; flex-direction: column; border: 2px solid #ecf0f1; }
+        .slide-title { font-size: 26px; color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 12px; margin-top: 0; margin-bottom: 25px; text-align: center; }
+        
+        .question-box { background: #f8fafc; border-left: 4px solid #3498db; padding: 20px; margin-bottom: 15px; border-radius: 0 6px 6px 0; font-size: 20px; }
+        .question-text { font-weight: bold; margin-bottom: 15px; display: block; color: #2c3e50; line-height: 1.5;}
+        
+        .quiz-input { border: 2px solid #bdc3c7; border-radius: 6px; padding: 10px 15px; font-size: 18px; font-weight: bold; color: #2c3e50; outline: none; transition: all 0.3s ease; width: 60%; }
+        .quiz-input:focus { border-color: #3498db; }
+        .quiz-input.correct { border-color: #2ecc71; background-color: #e8f8f0; color: #27ae60; }
+        .quiz-input.incorrect { border-color: #e74c3c; background-color: #fdeaea; color: #c0392b; }
+
+        .hint-btn { background: #f1c40f; color: #333; border: none; padding: 10px 15px; border-radius: 4px; font-size: 14px; cursor: pointer; margin-left: 5px; width: auto; font-weight: bold;}
+
+        .slide-controls { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 20px; }
+        .slide-controls button { width: auto; background-color: #7f8c8d; }
+        .slide-controls button:hover { background-color: #95a5a6; }
+        #slideCounter { font-size: 18px; font-weight: bold; color: #7f8c8d; }
+    </style>
+</head>
+<body>
+
+    <h1>🧠 SmartStudy</h1>
+    <p class="subtitle" id="mainSubtitle">Log in to access your interactive study tools</p>
+    
+    <div class="card-container" id="authSection">
+        <div class="auth-toggle">
+            <span id="tabSignIn" class="active" onclick="switchTab('signin')">Sign In</span>
+            <span id="tabSignUp" onclick="switchTab('signup')">Sign Up</span>
+        </div>
+        
+        <div id="authError" class="auth-error"></div>
+        
+        <div class="input-group">
+            <label>Email</label>
+            <input type="email" id="emailInput" placeholder="student@school.edu" />
+        </div>
+        <div class="input-group">
+            <label>Password</label>
+            <input type="password" id="passwordInput" placeholder="••••••••" />
+        </div>
+        
+        <button id="authBtn" onclick="handleAuth()">Sign In</button>
+    </div>
+
+    <div class="card-container" id="appSection">
+        <div class="user-bar">
+            <span id="welcomeText">Welcome!</span>
+            <button class="logout-btn" onclick="logout()">Log Out</button>
+        </div>
+        
+        <h2>Upload your Notes or Slides</h2>
+        
+        <div class="drop-zone" id="dropZone">
+            <span class="drop-zone__prompt">Drag & Drop .pptx, .docx, or .txt here<br>or click to browse</span>
+            <input type="file" id="fileInput" class="drop-zone__input" accept=".txt, .docx, .pptx">
+        </div>
+        
+        <button id="generateBtn" onclick="processFile()">✨ Generate Real AI Quiz</button>
+        <div id="status-message"></div>
+    </div>
+
+    <div id="slideViewerArea">
+        <div class="slide-screen">
+            <h2 class="slide-title" id="slideTitle">Slide Title</h2>
+            <div id="slideContent">
+                </div>
+        </div>
+        
+        <div class="slide-controls">
+            <button onclick="changeSlide(-1)">⬅ Previous</button>
+            <span id="slideCounter">1 / 1</span>
+            <button onclick="changeSlide(1)">Next ➡</button>
+        </div>
+    </div>
+
+    <script>
+        // --- AUTHENTICATION LOGIC ---
+        let currentMode = 'signin';
+        
+        window.onload = function() {
+            const loggedInUser = localStorage.getItem('smartStudy_currentUser');
+            if (loggedInUser) showApp(loggedInUser);
+        };
+
+        function switchTab(mode) {
+            currentMode = mode;
+            document.getElementById('authError').style.display = 'none';
+            if (mode === 'signin') {
+                document.getElementById('tabSignIn').classList.add('active');
+                document.getElementById('tabSignUp').classList.remove('active');
+                document.getElementById('authBtn').innerText = "Sign In";
+            } else {
+                document.getElementById('tabSignUp').classList.add('active');
+                document.getElementById('tabSignIn').classList.remove('active');
+                document.getElementById('authBtn').innerText = "Create Account";
+            }
+        }
+
+        function handleAuth() {
+            const email = document.getElementById('emailInput').value.trim();
+            const password = document.getElementById('passwordInput').value.trim();
+            const errorDiv = document.getElementById('authError');
+
+            if (!email || !password) {
+                errorDiv.innerText = "Please fill in all fields.";
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (currentMode === 'signup') {
+                if (localStorage.getItem(`user_${email}`)) {
+                    errorDiv.innerText = "An account with this email already exists!";
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                localStorage.setItem(`user_${email}`, password);
+                localStorage.setItem('smartStudy_currentUser', email);
+                showApp(email);
+            } else {
+                const savedPassword = localStorage.getItem(`user_${email}`);
+                if (savedPassword && savedPassword === password) {
+                    localStorage.setItem('smartStudy_currentUser', email);
+                    showApp(email);
+                } else {
+                    errorDiv.innerText = "Incorrect email or password.";
+                    errorDiv.style.display = 'block';
+                }
+            }
+        }
+
+        function showApp(email) {
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('appSection').style.display = 'block';
+            document.getElementById('mainSubtitle').style.display = 'none';
+            document.getElementById('welcomeText').innerText = `Logged in as: ${email.split('@')[0]}`;
+        }
+
+        function logout() {
+            localStorage.removeItem('smartStudy_currentUser');
+            document.getElementById('authSection').style.display = 'block';
+            document.getElementById('appSection').style.display = 'none';
+            document.getElementById('slideViewerArea').style.display = 'none';
+            document.getElementById('mainSubtitle').style.display = 'block';
+            document.getElementById('emailInput').value = '';
+            document.getElementById('passwordInput').value = '';
+        }
+
+        // --- DRAG & DROP LOGIC ---
+        const dropZone = document.getElementById("dropZone");
+        const fileInput = document.getElementById("fileInput");
+        const promptText = document.querySelector(".drop-zone__prompt");
+        const statusMessage = document.getElementById('status-message');
+        const generateBtn = document.getElementById('generateBtn');
+
+        dropZone.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", () => {
+            if (fileInput.files.length > 0) promptText.innerText = `Selected: ${fileInput.files[0].name}`;
+        });
+        dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drop-zone--over"); });
+        ["dragleave", "dragend"].forEach(type => dropZone.addEventListener(type, () => dropZone.classList.remove("drop-zone--over")));
+        dropZone.addEventListener("drop", (e) => {
+            e.preventDefault(); 
+            dropZone.classList.remove("drop-zone--over");
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                promptText.innerText = `Ready: ${e.dataTransfer.files[0].name}`;
+            }
+        });
+
+        // --- FILE PROCESSING & BACKEND COMMUNICATION ---
+        let currentSlides = [];
+        let currentSlideIndex = 0;
+
+        async function processFile() {
+            if (fileInput.files.length === 0) {
+                updateStatus("Please drop a file in the box first!", "#e74c3c");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            updateStatus(`Extracting text from ${file.name}...`, "#f39c12");
+            generateBtn.disabled = true;
+
+            try {
+                let extractedText = "";
+
+                if (file.name.endsWith('.docx')) {
+                    extractedText = await readDocxFile(file);
+                } else if (file.name.endsWith('.txt')) {
+                    extractedText = await readTxtFile(file);
+                } else if (file.name.endsWith('.pptx')) {
+                    extractedText = await parsePowerPointText(file);
+                } else {
+                    throw new Error("Unsupported file type. Upload .docx, .txt, or .pptx");
+                }
+
+                if (!extractedText.trim()) throw new Error("Could not extract readable text from this file.");
+
+                updateStatus("🧠 Sending text to your AI Server to generate questions...", "#3498db");
+
+                // Calls backend relative endpoint
+                const response = await fetch('/api/generate-questions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: extractedText })
+                });
+
+                const data = await response.json();
+                
+                if (!data.success) throw new Error(data.message || "Failed to generate questions.");
+
+                currentSlides = data.slides;
+                
+                updateStatus("Ready!", "#27ae60");
+                document.getElementById('appSection').style.display = 'none';
+                document.getElementById('slideViewerArea').style.display = 'flex';
+                
+                currentSlideIndex = 0;
+                renderSlide();
+
+            } catch (err) {
+                console.error(err);
+                updateStatus(`Error: ${err.message}`, "#e74c3c");
+            } finally {
+                generateBtn.disabled = false;
+            }
+        }
+
+        // --- RENDER SLIDE ---
+        function renderSlide() {
+            const slide = currentSlides[currentSlideIndex];
+            
+            const htmlContent = `
+                <div class="question-box">
+                    <span class="question-text">${slide.question}</span>
+                    <div>
+                        <input type="text" 
+                               class="quiz-input" 
+                               data-answer="${slide.answer}" 
+                               placeholder="Type your answer..." 
+                               oninput="validateInput(this)" />
+                        <button class="hint-btn" onclick="alert('Hint: The answer starts with ${slide.answer.substring(0, 2).toUpperCase()}')">💡 Hint</button>
+                    </div>
+                </div>`;
+            
+            document.getElementById('slideTitle').innerText = slide.title;
+            document.getElementById('slideContent').innerHTML = htmlContent;
+            document.getElementById('slideCounter').innerText = `${currentSlideIndex + 1} / ${currentSlides.length}`;
+        }
+
+        function validateInput(inputElem) {
+            const userText = inputElem.value.trim().toLowerCase();
+            const correctAnswer = inputElem.getAttribute("data-answer").toLowerCase();
+
+            if (userText === "") {
+                inputElem.className = "quiz-input";
+            } else if (userText === correctAnswer) {
+                inputElem.className = "quiz-input correct";
+            } else {
+                inputElem.className = "quiz-input incorrect";
+            }
+        }
+
+        function changeSlide(direction) {
+            currentSlideIndex += direction;
+            if (currentSlideIndex < 0) currentSlideIndex = currentSlides.length - 1;
+            if (currentSlideIndex >= currentSlides.length) currentSlideIndex = 0;
+            renderSlide();
+        }
+
+        // --- FILE EXTRACTOR HELPERS ---
+        function readTxtFile(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.readAsText(file);
+            });
+        }
+
+        function readDocxFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => mammoth.extractRawText({ arrayBuffer: e.target.result }).then(res => resolve(res.value)).catch(reject);
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function parsePowerPointText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const zip = await JSZip.loadAsync(e.target.result);
+                        const slideFiles = Object.keys(zip.files).filter(name => name.startsWith('ppt/slides/slide') && name.endsWith('.xml'));
+                        let fullText = "";
+                        for (const slidePath of slideFiles) {
+                            const xmlContent = await zip.files[slidePath].async("text");
+                            const xmlDoc = new DOMParser().parseFromString(xmlContent, "text/xml");
+                            const textNodes = xmlDoc.getElementsByTagName("a:t");
+                            for (let node of textNodes) fullText += node.textContent + " ";
+                        }
+                        resolve(fullText);
+                    } catch (err) { reject(err); }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function updateStatus(message, color) {
+            statusMessage.style.color = color;
+            statusMessage.innerText = message;
+        }
+    </script>
+</body>
+</html>
